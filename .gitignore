@@ -1,0 +1,14 @@
+# Database
+*.sqlite3
+*.sql
+
+# Config
+*.ini
+
+# Log
+log/
+tracebacks/
+
+# Temp
+__pycache__/
+*.pyc
