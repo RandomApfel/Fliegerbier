@@ -1,6 +1,7 @@
 from telegram import Bot
 from telegram.ext import ConversationHandler, CommandHandler, MessageHandler, Filters
-from .config import ADMINCHAT, BOTTOKEN
+from datetime import datetime
+from .config import ADMINCHAT, BOTTOKEN, DATABASE
 from .decorators import admin_only, patch_telegram_action
 from .database import Database, Consumer
 
@@ -141,6 +142,31 @@ def cancel(respond):
         'Okay. Aktion abgebrochen.'
     )
     return ConversationHandler.END
+
+
+@admin_only
+@patch_telegram_action
+def backup(respond):
+    from subprocess import Popen, PIPE
+    from io import BytesIO
+
+    respond('Backup wird generiert...')
+
+    p = Popen(['sqlite3', DATABASE, '.dump'], stdout=PIPE)
+    out, err = p.communicate()
+
+    if err:
+        respond('Fehler beim backup: ' + err.decode())
+        return
+
+    bio = BytesIO()
+    bio.name = 'backup_getränkeliste_{}.sqlite3.dump'.format(
+        datetime.now().strftime('%Y-%m-%d-%Hh-%Mm')
+    )
+    bio.write(out)
+    bio.seek(0)  # reset cursor
+
+    respond('Backup', file=bio)
 
 
 commit_handler = ConversationHandler(

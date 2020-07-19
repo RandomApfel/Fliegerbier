@@ -5,7 +5,7 @@ from .decorators import patch_telegram_action, requires_authorization
 from .config import BOTTOKEN, ADMINCHAT
 from .emoji import emojis
 from .enter_item_consumption import enter_item_consumption, undo_consumption
-from .administration import commit_handler
+from .administration import commit_handler, backup
 from .statistics import get_user_statistics
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -124,6 +124,10 @@ def build_updater():
 
     updater.dispatcher.add_handler(
         CommandHandler('chatid', get_chat_id)
+    )
+
+    updater.dispatcher.add_handler(
+        CommandHandler('backup', backup)
     )
 
     updater.dispatcher.add_handler(commit_handler)

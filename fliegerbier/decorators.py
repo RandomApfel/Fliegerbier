@@ -31,7 +31,18 @@ def _respond(context, chat_id, from_user, delete_me):
             m = context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
-                caption=txt[:1024])
+                caption=txt[:1024]
+            )
+            if do_delete:
+                do_deletion()
+            return m
+        if f_kwargs.get('file'):
+            document = f_kwargs.get('file')
+            m = context.bot.send_document(
+                chat_id=chat_id,
+                document=document,
+                caption=txt[:1024]
+            )
             if do_delete:
                 do_deletion()
             return m
