@@ -2,8 +2,12 @@ from sqlite3 import connect
 from time import time
 from datetime import datetime
 from typing import List, Dict, Tuple
+from collections import namedtuple
 from .config import DATABASE
-from .items import Item, item_list
+from .items import Item, item_list, item_lookup
+
+
+User = namedtuple('User', ['nickname', 'akaflieg_id', 'chat_id'])
 
 
 class ConsumptionEntry:
@@ -14,10 +18,7 @@ class ConsumptionEntry:
 
     @property
     def item(self) -> Item:
-        for it in item_list:
-            if it.identifier == self.item_identifier:
-                return it
-        raise ValueError('Item lookup failed!')
+        return item_lookup(self.item_identifier)
 
     @property
     def datetime(self) -> datetime:
@@ -31,21 +32,21 @@ class Database:
 
         self.cur.execute(
             'CREATE TABLE IF NOT EXISTS users '
-            '(chat_id INT UNIQUE, nickname TEXT UNIQUE, akaflieg_id TEXT UNIQUE)'
+            '(chat_id INT UNIQUE, nickname TEXT UNIQUE, akaflieg_id TEXT UNIQUE, full_name TEXT)'
         )
         self.cur.execute(
             'CREATE TABLE IF NOT EXISTS item_consumption '
-            '(chat_id INT, item_identifier TEXT, item_price_at_this_time FLOAT, timestamp INT)'
+            '(akaflieg_id INT, item_identifier TEXT, item_price_at_this_time FLOAT, timestamp INT)'
         )
         self.con.commit()
 
-    def enter_consumption(self, chat_id: int, item: Item, consumption_time: int = None) -> int:
+    def enter_consumption(self, akaflieg_id: int, item: Item, consumption_time: int = None) -> int:
         if consumption_time is None:
             consumption_time = time()
         self.cur.execute(
-            'INSERT INTO item_consumption (chat_id, item_identifier, item_price_at_this_time, timestamp) '
+            'INSERT INTO item_consumption (akaflieg_id, item_identifier, item_price_at_this_time, timestamp) '
             'VALUES (?, ?, ?, ?)',
-            (chat_id, item.identifier, item.price, int(consumption_time))
+            (akaflieg_id, item.identifier, item.price, int(consumption_time))
         )
         self.con.commit()
         return self.cur.lastrowid
@@ -71,6 +72,15 @@ class Database:
         ]
         return res
 
+    def get_consumer_list(self) -> List['Consumer']:
+        self.cur.execute(
+            'SELECT chat_id FROM users'
+        )
+        res = [
+            Consumer(r[0]) for r in self.cur.fetchall()
+        ]
+        res = sorted(res, key=lambda x: x.nickname)
+        return res
 
 class Consumer:
     def __init__(self, chat_id):
@@ -78,18 +88,23 @@ class Consumer:
         self.db = Database()
 
     def _get(self, key):
-        self.db.cur.execute(
+        cur = self.db.con.cursor()
+        cur.execute(
             'SELECT {} FROM users WHERE chat_id = ?'.format(key),
             (self.chat_id, )
         )
-        return self.db.cur.fetchone()[0]
+        res = cur.fetchone()[0]
+        cur.close()
+        return res
 
     def _set(self, key, value):
-        self.db.cur.execute(
+        cur = self.db.con.cursor()
+        cur.execute(
             'UPDATE users SET {} = ? WHERE chat_id = ?'.format(key),
             (value, self.chat_id)
         )
         self.db.con.commit()
+        cur.close()
 
     @property
     def nickname(self) -> str:
@@ -99,6 +114,10 @@ class Consumer:
     def akaflieg_id(self) -> str:
         return self._get('akaflieg_id')
 
+    @property
+    def full_name(self) -> str:
+        return self._get('full_name')
+
     @nickname.setter
     def nickname(self, value):
         self._set('nickname', value)
@@ -106,9 +125,13 @@ class Consumer:
     @akaflieg_id.setter
     def akaflieg_id(self, value):
         self._set('akaflieg_id', value)
+    
+    @full_name.setter
+    def full_name(self, value):
+        self._set('full_name', value)
 
     def consume(self, item: Item) -> int:
-        return self.db.enter_consumption(self.chat_id, item)
+        return self.db.enter_consumption(self.akaflieg_id, item)
 
     def unconsume(self, rowid: int):
         return self.db.remove_consumption(rowid)
@@ -127,6 +150,13 @@ class Consumer:
     def create(self):
         self.db.create_user(self.chat_id)
 
+    def delete(self):
+        self.db.cur.execute(
+            'DELETE FROM users WHERE chat_id = ?',
+            (self.chat_id, )
+        )
+        self.db.con.commit()
+
     def get_stats(self, from_timestamp: int = 0, to_timestamp: int = None) -> Dict[str, Tuple[int, float]]:
         if to_timestamp is None:
             to_timestamp = int(time() + 10000)
@@ -135,10 +165,10 @@ class Consumer:
         #chat_id INT, item_identifier TEXT, item_price_at_this_time FLOAT, timestamp INT
         self.db.cur.execute(
             'SELECT item_identifier, item_price_at_this_time '
-            'FROM item_consumption WHERE chat_id = ? '
+            'FROM item_consumption WHERE akaflieg_id = ? '
             'AND timestamp >= ? AND timestamp < ? '
             'ORDER BY timestamp ASC',
-            (self.chat_id, from_timestamp, to_timestamp)
+            (self.akaflieg_id, from_timestamp, to_timestamp)
         )
 
         for item_identifier, item_price_at_this_time in self.db.cur.fetchall():
@@ -153,10 +183,10 @@ class Consumer:
             to_timestamp = int(time() + 10000)
         self.db.cur.execute(
             'SELECT timestamp, item_identifier, item_price_at_this_time '
-            'FROM item_consumption WHERE chat_id = ? '
+            'FROM item_consumption WHERE akaflieg_id = ? '
             'AND timestamp >= ? AND timestamp < ? '
             'ORDER BY timestamp ASC',
-            (self.chat_id, from_timestamp, to_timestamp)
+            (self.akaflieg_id, from_timestamp, to_timestamp)
         )
 
         res = self.db.cur.fetchall()

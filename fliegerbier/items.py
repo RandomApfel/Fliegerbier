@@ -28,3 +28,10 @@ item_list: List[Item] = [
     Item('Limo', identifier='limo', price=1, emoji=emojis.lemonade),
     Item('Wasser', identifier='water', price=0.4, emoji=emojis.wave),
 ]
+
+
+def item_lookup(identifier: str) -> Item:
+    for it in item_list:
+        if it.identifier == identifier:
+            return it
+    raise ValueError('Item Lookup failed!')

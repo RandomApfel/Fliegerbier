@@ -5,7 +5,15 @@ from .decorators import patch_telegram_action, requires_authorization
 from .config import BOTTOKEN, ADMINCHAT
 from .emoji import emojis
 from .enter_item_consumption import enter_item_consumption, undo_consumption
-from .administration import commit_handler, backup
+from .administration import (
+    commit_handler,
+    backup,
+    help_response,
+    list_users,
+    edit_handler,
+    delete_handler,
+    rechnung, admin_rechnung, admin_rechnung_out
+)
 from .statistics import get_user_statistics, update_user_statistics, get_user_csv
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
@@ -118,17 +126,14 @@ def build_updater():
         persistence=None
     )
 
-    updater.dispatcher.add_handler(
-        CommandHandler('start', start_message)
-    )
-
-    updater.dispatcher.add_handler(
-        CommandHandler('chatid', get_chat_id)
-    )
-
-    updater.dispatcher.add_handler(
-        CommandHandler('backup', backup)
-    )
+    updater.dispatcher.add_handler(CommandHandler('start', start_message))
+    updater.dispatcher.add_handler(CommandHandler('chatid', get_chat_id))
+    updater.dispatcher.add_handler(CommandHandler('backup', backup))
+    updater.dispatcher.add_handler(CommandHandler('help', help_response))
+    updater.dispatcher.add_handler(CommandHandler('list', list_users))
+    updater.dispatcher.add_handler(CommandHandler('rechnung', rechnung))
+    updater.dispatcher.add_handler(edit_handler)
+    updater.dispatcher.add_handler(delete_handler)
 
     updater.dispatcher.add_handler(commit_handler)
     updater.dispatcher.add_handler(MessageHandler(Filters.text, handle_text))
@@ -145,6 +150,13 @@ def build_updater():
     )
     updater.dispatcher.add_handler(
         CallbackQueryHandler(get_user_csv, pattern='user_send_csv')
+    )
+
+    updater.dispatcher.add_handler(
+        CallbackQueryHandler(admin_rechnung_out, pattern='admin_rechnung_out_')
+    )
+    updater.dispatcher.add_handler(
+        CallbackQueryHandler(admin_rechnung, pattern='admin_rechnung_')
     )
 
     updater.dispatcher.add_error_handler(error_handler)
