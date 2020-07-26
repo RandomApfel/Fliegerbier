@@ -1,8 +1,27 @@
 from sqlite3 import connect
 from time import time
+from datetime import datetime
 from typing import List, Dict, Tuple
 from .config import DATABASE
-from .items import Item
+from .items import Item, item_list
+
+
+class ConsumptionEntry:
+    def __init__(self, timestamp: int, item_identifier: str, price_at_time: float):
+        self.timestamp = timestamp
+        self.item_identifier = item_identifier
+        self.price_at_time= price_at_time
+
+    @property
+    def item(self) -> Item:
+        for it in item_list:
+            if it.identifier == self.item_identifier:
+                return it
+        raise ValueError('Item lookup failed!')
+
+    @property
+    def datetime(self) -> datetime:
+        return datetime.fromtimestamp(self.timestamp)
 
 
 class Database:
@@ -20,11 +39,13 @@ class Database:
         )
         self.con.commit()
 
-    def enter_consumption(self, chat_id: int, item: Item) -> int:
+    def enter_consumption(self, chat_id: int, item: Item, consumption_time: int = None) -> int:
+        if consumption_time is None:
+            consumption_time = time()
         self.cur.execute(
             'INSERT INTO item_consumption (chat_id, item_identifier, item_price_at_this_time, timestamp) '
             'VALUES (?, ?, ?, ?)',
-            (chat_id, item.identifier, item.price, int(time()))
+            (chat_id, item.identifier, item.price, int(consumption_time))
         )
         self.con.commit()
         return self.cur.lastrowid
@@ -106,13 +127,18 @@ class Consumer:
     def create(self):
         self.db.create_user(self.chat_id)
 
-    def get_stats(self) -> Dict[str, Tuple[int, float]]:
+    def get_stats(self, from_timestamp: int = 0, to_timestamp: int = None) -> Dict[str, Tuple[int, float]]:
+        if to_timestamp is None:
+            to_timestamp = int(time() + 10000)
+        
         res = {}
         #chat_id INT, item_identifier TEXT, item_price_at_this_time FLOAT, timestamp INT
         self.db.cur.execute(
             'SELECT item_identifier, item_price_at_this_time '
-            'FROM item_consumption WHERE chat_id = ?',
-            (self.chat_id, )
+            'FROM item_consumption WHERE chat_id = ? '
+            'AND timestamp >= ? AND timestamp < ? '
+            'ORDER BY timestamp ASC',
+            (self.chat_id, from_timestamp, to_timestamp)
         )
 
         for item_identifier, item_price_at_this_time in self.db.cur.fetchall():
@@ -122,6 +148,24 @@ class Consumer:
 
         return res
 
+    def get_consumption_history(self, from_timestamp: int = 0, to_timestamp: int = None) -> List[ConsumptionEntry]:
+        if to_timestamp is None:
+            to_timestamp = int(time() + 10000)
+        self.db.cur.execute(
+            'SELECT timestamp, item_identifier, item_price_at_this_time '
+            'FROM item_consumption WHERE chat_id = ? '
+            'AND timestamp >= ? AND timestamp < ? '
+            'ORDER BY timestamp ASC',
+            (self.chat_id, from_timestamp, to_timestamp)
+        )
+
+        res = self.db.cur.fetchall()
+        result = []
+        for r in res:
+            result.append(
+                ConsumptionEntry(r[0], r[1], r[2])
+            )
+        return result
 
 
 # must be decorated manually

@@ -6,7 +6,7 @@ from .config import BOTTOKEN, ADMINCHAT
 from .emoji import emojis
 from .enter_item_consumption import enter_item_consumption, undo_consumption
 from .administration import commit_handler, backup
-from .statistics import get_user_statistics
+from .statistics import get_user_statistics, update_user_statistics, get_user_csv
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     CommandHandler,
@@ -139,6 +139,12 @@ def build_updater():
 
     updater.dispatcher.add_handler(
         CallbackQueryHandler(undo_consumption, pattern='revert_')
+    )
+    updater.dispatcher.add_handler(
+        CallbackQueryHandler(update_user_statistics, pattern='user_view_')
+    )
+    updater.dispatcher.add_handler(
+        CallbackQueryHandler(get_user_csv, pattern='user_send_csv')
     )
 
     updater.dispatcher.add_error_handler(error_handler)

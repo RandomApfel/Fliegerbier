@@ -26,5 +26,5 @@ class Item:
 item_list: List[Item] = [
     Item('Bier', identifier='beer', price=1, emoji=emojis.beer),
     Item('Limo', identifier='limo', price=1, emoji=emojis.lemonade),
-    Item('Wasser', identifier='water', price=1, emoji=emojis.wave),
+    Item('Wasser', identifier='water', price=0.4, emoji=emojis.wave),
 ]
