@@ -45,7 +45,8 @@ def rechnung(respond):
 
     respond(
         'Möchtest du für diesen {} '
-        'eine Rechnung erstellen?'
+        'eine Rechnung erstellen?\n'
+        '(unvollständig)'
         .format(this_month.month_name),
         reply_markup=get_reply_markup(0)
     )
@@ -57,11 +58,16 @@ def admin_rechnung(original_message_id, edit, callback_data):
     month_n = int(x.groupdict()['month'])
 
     month = get_month(month_n)
+    new_text = (
+        'Möchtest du für {} {} '
+        'eine Rechnung erstellen?'
+        .format(month.month_name, month.year)
+    )
+    if month_n == 0:
+        new_text += '\n(unvollständig)'
     edit(
         message_id=original_message_id,
-        new_text='Möchtest du für {}/{} '
-        'eine Rechnung erstellen?'
-        .format(month.month_name, month.year),
+        new_text=new_text,
         reply_markup=get_reply_markup(month_n)
     )
 
@@ -74,15 +80,15 @@ def admin_rechnung_out(respond, edit, callback_data):
     month = get_month(month_n)
 
     bio = BytesIO()
-    bio.name = 'Rechnung {}-{}.csv'.format(month.month, month.year)
+    bio.name = 'Rechnung {:0>2} {}.csv'.format(month.month, month.year)
 
     bio.write(
-        _create_csv(month_n).encode('utf-8')
+        _create_csv(month_n).encode('latin-1')
     )
     bio.seek(0)
 
     respond(
-        'Monatsrechnung {}/{}'.format(month.month, month.year),
+        'Monatsrechnung {:0>2}/{}'.format(month.month, month.year),
         file=bio
     )
 
@@ -110,9 +116,9 @@ def _create_csv(month_n: int):
             sum_ += price_sum
 
         line = (
-            '{now}; Getränke-Abrechnung {month}/{year}, '
+            '{now}; Getränke-Abrechnung {month:0>2}/{year}, '
             '{drinks}, {full_name}; {akaflieg_id}; 880; {sum}; {year}\n'.format(
-                now=now.strftime('%Y/%m/%d'),
+                now=now.strftime('%d.%m.%Y'),
                 month=month.month,
                 year=month.year,
                 drinks=', '.join(stat_msg_parts),
