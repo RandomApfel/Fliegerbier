@@ -61,7 +61,8 @@ def select_user(respond, text, chat_dict):
     chat_dict['consumer_to_be_edited'] = consumer
 
     respond(
-        'Möchtest du den Spitznamen ändern?',
+        'Möchtest du den Spitznamen ändern?\n'
+        '({})'.format(consumer.nickname),
         reply_markup=ReplyKeyboardMarkup([['Ja', 'Nein']])
     )
     return 'yes_no_change_nickname'
@@ -77,7 +78,11 @@ def yes_no_change_nickname(respond, text, chat_dict):
         )
         return 'choose_nickname'
     elif text.lower() == 'nein':
-        respond('Okay. Möchtest du den vollen Namen ändern?')
+        consumer = chat_dict['consumer_to_be_edited']
+        respond(
+            'Okay. Möchtest du den vollen Namen ändern?\n'
+            '({})'.format(consumer.full_name)
+        )
         return 'yes_no_full_name'
     else:
         respond('Bitte nutze die Buttons.')
@@ -104,8 +109,10 @@ def choose_nickname(respond, text, chat_dict):
         )
         return 'choose_nickname'
 
+    consumer = chat_dict['consumer_to_be_edited']
     respond(
-        'Okay. Möchtest du den vollen Namen ändern?',
+        'Okay. Möchtest du den vollen Namen ändern?\n'
+        '({})'.format(consumer.full_name),
         reply_markup=ReplyKeyboardMarkup([['Ja', 'Nein']])
     )
     return 'yes_no_full_name'
@@ -113,7 +120,7 @@ def choose_nickname(respond, text, chat_dict):
 
 @admin_only
 @patch_telegram_action
-def yes_no_full_name(respond, text):
+def yes_no_full_name(respond, text, chat_dict):
     if text.lower() == 'ja':
         respond(
             'Okay. Wie soll der neue Name sein?',
@@ -121,17 +128,23 @@ def yes_no_full_name(respond, text):
         )
         return 'choose_full_name'
     elif text.lower() == 'nein':
-        respond('Okay. Möchtest du die Akaflieg ID ändern?')
+        consumer = chat_dict['consumer_to_be_edited']
+        respond(
+            'Okay. Möchtest du die Akaflieg ID ändern?\n'
+            '({})'.format(consumer.akaflieg_id)
+        )
         return 'yes_no_change_akaflieg_id'
 
 
 @admin_only
 @patch_telegram_action
 def choose_full_name(respond, text, chat_dict):
-    chat_dict['consumer_to_be_edited'].full_name = text
+    consumer = chat_dict['consumer_to_be_edited']
+    consumer.full_name = text
 
     respond(
-        'Der Name wurde gesetzt. Möchtest du die Akaflieg ID ändern?',
+        'Der Name wurde gesetzt. Möchtest du die Akaflieg ID ändern?\n'
+        '({})'.format(consumer.akaflieg_id),
         reply_markup=ReplyKeyboardMarkup([['Ja', 'Nein']])
     )
     return 'yes_no_change_akaflieg_id'

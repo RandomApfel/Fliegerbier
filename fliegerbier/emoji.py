@@ -48,10 +48,14 @@ class emojis:
     fountain_pen = '🖋'
     stop_watch = '⏱'
     celebrate = '🎉'
+    mailbox = '📬'
 
     # Food
     beer = '🍺'
     lemonade = '🧃'
+
+    # Persons
+    pilot = '👨🏼‍✈️'
 
 efm = emojis().__dict__  # emoji format dict
 

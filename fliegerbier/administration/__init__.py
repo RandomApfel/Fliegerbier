@@ -4,6 +4,7 @@ from datetime import datetime
 from ..config import ADMINCHAT, BOTTOKEN, DATABASE
 from ..decorators import admin_only, patch_telegram_action
 from ..database import Database, Consumer
+from ..emoji import emojis
 from .commit import commit_handler
 from .edit import edit_handler
 from .delete import delete_handler
@@ -71,9 +72,20 @@ def list_users(respond):
     msg = 'Die folgenden Nutzer sind in der Datenbank:\n\n'
 
     for user in user_list:
-        msg += '{}, Aka {}, Chat {}\n'.format(
-            user.nickname, user.akaflieg_id, user.chat_id
+        part = (
+            '{head} {nickname} ({full_name})\n'
+            '{rocket} Aka ID {aka_id} {telegram} Chat {chat_id}\n'
+        ).format(
+            head=emojis.pilot,
+            nickname=user.nickname,
+            full_name=user.full_name,
+            rocket=emojis.rocket,
+            aka_id=user.akaflieg_id,
+            telegram=emojis.mailbox,
+            chat_id=user.chat_id,
         )
+
+        msg += part +'\n'
 
     respond(msg)
 
