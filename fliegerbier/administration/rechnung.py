@@ -80,10 +80,10 @@ def admin_rechnung_out(respond, edit, callback_data):
     month = get_month(month_n)
 
     bio = BytesIO()
-    bio.name = 'Rechnung {:0>2} {}.csv'.format(month.month, month.year)
+    bio.name = 'Rechnung {:0>2} {}.txt'.format(month.month, month.year)
 
     bio.write(
-        _create_csv(month_n).encode('latin-1')
+        _create_csv(month_n).encode('cp1252', 'replace')
     )
     bio.seek(0)
 
@@ -98,8 +98,8 @@ def _create_csv(month_n: int):
     db = Database()
     consumers = db.get_consumer_list()
 
-    now = datetime.now()
     month = get_month(month_n)
+    last_day_of_month = datetime.fromtimestamp(month.end_ts - 1)
 
     csv_content = ''
 
@@ -115,16 +115,20 @@ def _create_csv(month_n: int):
             )
             sum_ += price_sum
 
+        drinks = ''
+        if stat_msg_parts:
+            drinks = ', '.join(stat_msg_parts) + ', '
+
         line = (
-            '{now}; Getränke-Abrechnung {month:0>2}/{year}, '
-            '{drinks}, {full_name}; {akaflieg_id}; 880; {sum}; {year}\n'.format(
-                now=now.strftime('%d.%m.%Y'),
+            '{last_day_of_month};Getränke-Abrechnung {month:0>2}/{year}, '
+            '{drinks}{full_name};{akaflieg_id};880;{sum};{year}\n'.format(
+                last_day_of_month=last_day_of_month.strftime('%d.%m.%Y'),
                 month=month.month,
                 year=month.year,
-                drinks=', '.join(stat_msg_parts),
+                drinks=drinks,
                 full_name=c.full_name,
                 akaflieg_id=c.akaflieg_id,
-                sum=sum_
+                sum=str(sum_).replace('.', ',')  # 12.1 to 12,1
             )
         )
         csv_content += line
