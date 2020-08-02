@@ -99,7 +99,10 @@ def _create_csv(month_n: int):
     month = get_month(month_n)
     last_day_of_month = datetime.fromtimestamp(month.end_ts - 1)
 
-    consumption = db.get_consumption_dictionary()
+    consumption = db.get_consumption_dictionary(
+        from_timestamp=month.start_ts,
+        to_timestamp=month.end_ts,
+    )
 
     keys = sorted(
         list(consumption.keys()),
