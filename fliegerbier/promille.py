@@ -45,7 +45,7 @@ def _get_promille_message(c: Consumer):
     # Now
     hours_since_last_drink = (time() - last_timestamp) / 3600
     for i in range(4):
-        last_promille[i] = max(0, last_promille[i] - decays[i] * hours_since_last_drink)
+        last_promille[i] = max(0.0, last_promille[i] - decays[i] * hours_since_last_drink)
 
     return (
         'Dein angenommenes Körpergewicht ist {weight}kg.\n'
