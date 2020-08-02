@@ -93,43 +93,45 @@ def admin_rechnung_out(respond, edit, callback_data):
     )
 
 
-
 def _create_csv(month_n: int):
     db = Database()
-    consumers = db.get_consumer_list()
 
     month = get_month(month_n)
     last_day_of_month = datetime.fromtimestamp(month.end_ts - 1)
 
-    csv_content = ''
+    consumption = db.get_consumption_dictionary()
 
-    for c in consumers:
-        stats = c.get_stats(from_timestamp=month.start_ts, to_timestamp=month.end_ts)
-        stat_msg_parts = []
+    keys = sorted(
+        list(consumption.keys()),
+        key=lambda x: Consumer(x).full_name
+    )
+
+    csv = ''
+    for akaflieg_id in keys:
+        drinks = []
         sum_ = 0
-        for key in sorted(list(stats.keys())):
-            count, price_sum = stats[key]
-            item = item_lookup(key)
-            stat_msg_parts.append(
-                '{} x{}'.format(item.name, count)
-            )
-            sum_ += price_sum
-
-        drinks = ''
-        if stat_msg_parts:
-            drinks = ', '.join(stat_msg_parts) + ', '
+        for item_identifier in sorted(consumption[akaflieg_id].keys()):
+            item = item_lookup(item_identifier)
+            count = consumption[akaflieg_id][item_identifier]['count']
+            drinks.append('{} x{}'.format(item.name, count))
+            sum_ += consumption[akaflieg_id][item_identifier]['sum']
+        
+        c = Consumer.from_akaflieg_id(akaflieg_id)
+        full_name = '[nicht in Datenbank]'
+        if c.is_authorized():
+            full_name = c.full_name
 
         line = (
             '{last_day_of_month};Getränke-Abrechnung {month:0>2}/{year}, '
-            '{drinks}{full_name};{akaflieg_id};880;{sum};{year}\n'.format(
+            '{drinks}, {full_name};{akaflieg_id};880;{sum};{year}\n'.format(
                 last_day_of_month=last_day_of_month.strftime('%d.%m.%Y'),
                 month=month.month,
                 year=month.year,
-                drinks=drinks,
-                full_name=c.full_name,
-                akaflieg_id=c.akaflieg_id,
+                drinks=', '.join(drinks),
+                full_name=full_name,
+                akaflieg_id=akaflieg_id,
                 sum=str(sum_).replace('.', ',')  # 12.1 to 12,1
             )
         )
-        csv_content += line
-    return csv_content
+        csv += line
+    return csv

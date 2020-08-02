@@ -1,9 +1,35 @@
 from telegram import Bot, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import ConversationHandler, CommandHandler, MessageHandler, Filters
+from telegram.ext import ConversationHandler, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from datetime import datetime
 from ..config import ADMINCHAT, BOTTOKEN, DATABASE
 from ..decorators import admin_only, patch_telegram_action
 from ..database import Database, Consumer
+from re import match
+
+
+@patch_telegram_action
+def commit_callback(callback_data, respond, chat_dict):
+    p = match(r'commit_(?P<chat_id>[0-9]+)$', callback_data)
+    if not p:
+        respond('Massiver bug, Code MBCPDM! Bitte an Info weitergeben!')
+        return
+
+    chat_id = p.groupdict()['chat_id']
+    chat_dict['current_client_chat_id'] = chat_id
+    c = Consumer(chat_id)
+    if not c.user_exists():
+        respond('Massiver bug, Code MBUDEC! Bitte an Info weitergeben!')
+        return
+
+    respond(
+        'Commiten von {} ({}).\n'
+        'Bitte gebe jetzt den vollen Namen an.\n'
+        'Dieser Name wird auf der Rechnung verwendet.'
+        .format(c.telegram_names, chat_id),
+        reply_markup=ReplyKeyboardRemove()
+    )
+
+    return 'choose_full_name'
 
 
 @admin_only
@@ -12,12 +38,15 @@ def commit(respond):
     db = Database()
 
     unauthorized = db.get_unauthorized_chat_ids()
-    buttons = [[str(x)] for x in unauthorized]
+    buttons = []
+    for u in unauthorized:
+        c = Consumer(u)
+        buttons.append([
+            '{} - {}'.format(c.chat_id, c.telegram_names)
+        ])
 
     if not unauthorized:
-        respond(
-            'Es gibt keine ausstehenden Anfragen.'
-        )
+        respond('Es gibt keine ausstehenden Anfragen.')
         return ConversationHandler.END
 
     respond(
@@ -37,13 +66,15 @@ def take_chat_id(respond, text, chat_dict):
 
     chat_id_list_as_strings = [str(c) for c in db.get_unauthorized_chat_ids()]
 
-    if text not in chat_id_list_as_strings:
+    chat_id_from_text = text.split(' - ')[0]
+
+    if chat_id_from_text not in chat_id_list_as_strings:
         respond(
             'Bitte nutze nur die Buttons.'
         )
         return 'take_chat_id'
 
-    chat_dict['current_client_chat_id'] = text
+    chat_dict['current_client_chat_id'] = chat_id_from_text
 
     respond(
         'Bitte gebe jetzt den vollen Namen an.\n'
@@ -135,7 +166,10 @@ def cancel(respond):
 
 
 commit_handler = ConversationHandler(
-    entry_points=[CommandHandler('commit', commit)],
+    entry_points=[
+        CallbackQueryHandler(commit_callback, pattern='commit_'),
+        CommandHandler('commit', commit)
+    ],
     states={
         'take_chat_id': [MessageHandler(Filters.text, take_chat_id)],
         'choose_full_name': [MessageHandler(Filters.text, choose_full_name)],
@@ -143,8 +177,8 @@ commit_handler = ConversationHandler(
         'choose_name': [MessageHandler(Filters.text, choose_name)],
     },
     fallbacks=[
-        MessageHandler(Filters.all, fallback),
         CommandHandler('cancel', cancel),
+        MessageHandler(Filters.all, fallback),
     ]
 )
 

@@ -1,4 +1,5 @@
-from sqlite3 import connect
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from sqlite3 import connect, OperationalError
 from time import time
 from datetime import datetime
 from typing import List, Dict, Tuple
@@ -32,7 +33,7 @@ class Database:
 
         self.cur.execute(
             'CREATE TABLE IF NOT EXISTS users '
-            '(chat_id INT UNIQUE, nickname TEXT UNIQUE, akaflieg_id TEXT UNIQUE, full_name TEXT)'
+            '(chat_id INT UNIQUE, nickname TEXT UNIQUE, akaflieg_id TEXT UNIQUE, full_name TEXT, telegram_names TEXT)'
         )
         self.cur.execute(
             'CREATE TABLE IF NOT EXISTS item_consumption '
@@ -82,10 +83,50 @@ class Database:
         res = sorted(res, key=lambda x: x.nickname)
         return res
 
+    def get_consumption_dictionary(
+        self,
+        from_timestamp: int = 0,
+        to_timestamp: int = None
+    ) -> Dict[int, Dict[str, Dict[str, int]]]:
+
+        if to_timestamp is None:
+            to_timestamp = int(time() + 10000)
+
+        self.cur.execute(
+            'SELECT akaflieg_id, item_identifier, item_price_at_this_time FROM item_consumption '
+            'WHERE timestamp >= ? AND timestamp < ?',
+            (from_timestamp, to_timestamp)
+        )
+
+        res = {}
+        # res= {2203: {'beer': {'count': 5, 'sum': 5.0}, 'water': {'count': 2, 'sum': 0.8}}}
+        for akaflieg_id, item_identifier, item_price_at_this_time in self.cur.fetchall():
+            res[akaflieg_id] = res.get(akaflieg_id, {})
+            res[akaflieg_id][item_identifier] = res[akaflieg_id].get(
+                item_identifier, {'count': 0, 'sum': 0}
+            )
+            res[akaflieg_id][item_identifier]['count'] += 1
+            res[akaflieg_id][item_identifier]['sum'] += item_price_at_this_time
+        return res
+
+
 class Consumer:
     def __init__(self, chat_id):
         self.chat_id = chat_id
         self.db = Database()
+
+    @classmethod
+    def from_akaflieg_id(cls, akaflieg_id):
+        instance = cls(-1)
+        instance.db.cur.execute(
+            'SELECT chat_id FROM users WHERE akaflieg_id = ?',
+            (akaflieg_id, )
+        )
+        res = instance.db.cur.fetchone()
+        if res is None:
+            return instance
+        instance.chat_id = res[0]
+        return instance
 
     def _get(self, key):
         cur = self.db.con.cursor()
@@ -93,9 +134,11 @@ class Consumer:
             'SELECT {} FROM users WHERE chat_id = ?'.format(key),
             (self.chat_id, )
         )
-        res = cur.fetchone()[0]
+        res = cur.fetchone()
+        if res is None:
+            return None
         cur.close()
-        return res
+        return res[0]
 
     def _set(self, key, value):
         cur = self.db.con.cursor()
@@ -108,15 +151,19 @@ class Consumer:
 
     @property
     def nickname(self) -> str:
-        return self._get('nickname')
+        return self._get('nickname') or '[nicht gesetzt]'
 
     @property
     def akaflieg_id(self) -> str:
-        return self._get('akaflieg_id')
+        return self._get('akaflieg_id') or '[nicht gesetzt]'
 
     @property
     def full_name(self) -> str:
-        return self._get('full_name')
+        return self._get('full_name') or '[nicht gesetzt]'
+
+    @property
+    def telegram_names(self) -> str:
+        return self._get('telegram_names') or '[nicht gesetzt]'
 
     @nickname.setter
     def nickname(self, value):
@@ -129,6 +176,16 @@ class Consumer:
     @full_name.setter
     def full_name(self, value):
         self._set('full_name', value)
+
+    def set_telegram_names(self, user):
+        s = ''
+        if user.username:
+            s += '@{} '.format(user.username)
+        if getattr(user, 'first_name', None):
+            s += '{} '.format(getattr(user, 'first_name'))
+        if getattr(user, 'last_name', None):
+            s += '{}'.format(getattr(user, 'last_name'))
+        self._set('telegram_names', s.strip())
 
     def consume(self, item: Item) -> int:
         return self.db.enter_consumption(self.akaflieg_id, item)
@@ -199,7 +256,7 @@ class Consumer:
 
 
 # must be decorated manually
-def is_authorized(respond, chat_id, username, first_name, last_name):
+def is_authorized(respond, chat_id, username, first_name, last_name, user):
     client = Consumer(chat_id)
 
     def none_str(t):
@@ -209,6 +266,9 @@ def is_authorized(respond, chat_id, username, first_name, last_name):
 
     if not client.user_exists():
         from .administration import send_admin_message
+        reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton('Diesen Nutzer commiten', callback_data='commit_{}'.format(chat_id))]
+        ])
         send_admin_message(
             'Ein neuer Nutzer hat sich gemeldet.\n'
             'Nutzername: {}, Vorname: {}, Nachname: {}.\n'
@@ -220,10 +280,13 @@ def is_authorized(respond, chat_id, username, first_name, last_name):
                 none_str(first_name),
                 none_str(last_name),
                 chat_id,
-            )
+            ),
+            reply_markup=reply_markup
         )
         client.create()
+        client.set_telegram_names(user)
         respond(
+            'Deine Nachricht wurde ignoriert!\n'
             'Du bist noch nicht in der Datenbank.\n'
             'Der Kassenwart wurde über deine Anfrage benachrichtigt.\n'
             'Du wirst benachrichtigt sobald er dich bestätigt.'
@@ -232,11 +295,14 @@ def is_authorized(respond, chat_id, username, first_name, last_name):
 
     if not client.is_authorized():
         respond(
+            'Deine Nachricht wurde ignoriert, weil du '
+            'noch nicht in der Datenbank bist.\n\n'
             'Der Kassenwart weiß bescheid, du kannst ihn '
             'aber auch nochmal kontaktieren.\n'
             'Hierbei könnte deine Chat ID  helfen: {}.'
             .format(chat_id)
         )
+        client.set_telegram_names(user)
         return False
 
     return True
