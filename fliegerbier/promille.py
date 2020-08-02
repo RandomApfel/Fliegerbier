@@ -20,7 +20,7 @@ def _get_promille_message(c: Consumer):
     )
 
     decays = [FEMALE_HIGH_DECAY, FEMALE_LOW_DECAY, MALE_HIGH_DECAY, MALE_LOW_DECAY]
-    last_promille = [0, 0, 0, 0]
+    last_promille = [0.0, 0.0, 0.0, 0.0]
     last_timestamp = 0
 
     for consumption in consum_history:
@@ -50,7 +50,7 @@ def _get_promille_message(c: Consumer):
     return (
         'Dein angenommenes Körpergewicht ist {weight}kg.\n'
         'Sämtliche hier ausgeführten Berechnungen sind nicht juristisch bindend.\n\n'
-        'Dein Promillegehalt:\n'
+        '{wine} Dein Promillegehalt:\n'
         '{male} Männlich realistisch: {male_min:.3}, mit Sicherheitsfaktor: {male_max:.3}\n'
         '{female} Weiblich realistisch: {female_min:.3}, mit Sicherheitsfaktor: {female_max:.3}\n'
 
@@ -58,6 +58,7 @@ def _get_promille_message(c: Consumer):
             weight=c.weight,
             male=emojis.man,
             female=emojis.woman,
+            wine=emojis.wine,
             male_min=last_promille[2],
             male_max=last_promille[3],
             female_min=last_promille[0],

@@ -53,6 +53,7 @@ class emojis:
     # Food
     beer = '🍺'
     lemonade = '🧃'
+    wine = '🍷'
 
     # Persons
     pilot = '👨🏼‍✈️'
