@@ -8,13 +8,14 @@ from .enter_item_consumption import enter_item_consumption, undo_consumption
 from .administration import (
     commit_handler,
     backup,
-    help_response,
+    admin_help_response,
     list_users,
     edit_handler,
     delete_handler,
     rechnung, admin_rechnung, admin_rechnung_out
 )
 from .statistics import get_user_statistics, update_user_statistics, get_user_csv
+from .promille import get_promille, get_promille_callback
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     CommandHandler,
@@ -100,7 +101,8 @@ def error_handler(update, context):
 def handle_text(update, context, text, respond, chat_id):
     if chat_id == ADMINCHAT:
         respond(
-            'Nachricht ignoriert, du befindest dich in keinem Programm.',
+            'Nachricht ignoriert, du befindest dich in keinem Programm.\n'
+            'Führe /help aus für alle Adminbefehle.',
             reply_markup=ReplyKeyboardRemove()
         )
         return
@@ -129,11 +131,14 @@ def build_updater():
     updater.dispatcher.add_handler(CommandHandler('start', start_message))
     updater.dispatcher.add_handler(CommandHandler('chatid', get_chat_id))
     updater.dispatcher.add_handler(CommandHandler('backup', backup))
-    updater.dispatcher.add_handler(CommandHandler('help', help_response))
+    updater.dispatcher.add_handler(CommandHandler('help', admin_help_response))
     updater.dispatcher.add_handler(CommandHandler('list', list_users))
     updater.dispatcher.add_handler(CommandHandler('rechnung', rechnung))
     updater.dispatcher.add_handler(edit_handler)
     updater.dispatcher.add_handler(delete_handler)
+
+    updater.dispatcher.add_handler(CommandHandler('promille', get_promille))
+    updater.dispatcher.add_handler(CommandHandler('status', get_user_statistics))
 
     updater.dispatcher.add_handler(commit_handler)
     updater.dispatcher.add_handler(MessageHandler(Filters.text, handle_text))
@@ -157,6 +162,10 @@ def build_updater():
     )
     updater.dispatcher.add_handler(
         CallbackQueryHandler(admin_rechnung, pattern='admin_rechnung_')
+    )
+
+    updater.dispatcher.add_handler(
+        CallbackQueryHandler(get_promille_callback, pattern='promille_')
     )
 
     updater.dispatcher.add_error_handler(error_handler)

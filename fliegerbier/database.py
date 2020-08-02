@@ -33,7 +33,8 @@ class Database:
 
         self.cur.execute(
             'CREATE TABLE IF NOT EXISTS users '
-            '(chat_id INT UNIQUE, nickname TEXT UNIQUE, akaflieg_id TEXT UNIQUE, full_name TEXT, telegram_names TEXT)'
+            '(chat_id INT UNIQUE, nickname TEXT UNIQUE, akaflieg_id TEXT UNIQUE, '
+            'full_name TEXT, telegram_names TEXT, weight INT)'
         )
         self.cur.execute(
             'CREATE TABLE IF NOT EXISTS item_consumption '
@@ -164,6 +165,14 @@ class Consumer:
     @property
     def telegram_names(self) -> str:
         return self._get('telegram_names') or '[nicht gesetzt]'
+
+    @property
+    def weight(self) -> int:
+        return self._get('weight') or 70
+
+    @weight.setter
+    def weight(self, value):
+        self._set('weight', value)
 
     @nickname.setter
     def nickname(self, value):

@@ -20,7 +20,7 @@ def send_admin_message(text, **kwargs):
 
 @admin_only
 @patch_telegram_action
-def help_response(respond):
+def admin_help_response(respond):
     respond(
         'Hallo Admin.\n'
         '/commit - Ausstehende Eintragungsanträge '

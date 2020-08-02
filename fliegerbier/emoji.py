@@ -56,6 +56,8 @@ class emojis:
 
     # Persons
     pilot = '👨🏼‍✈️'
+    man = '🙎🏼‍♂️'
+    woman = '🙎🏼‍♀️'
 
 efm = emojis().__dict__  # emoji format dict
 
