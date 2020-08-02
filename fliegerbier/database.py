@@ -171,7 +171,13 @@ class Consumer:
 
     @akaflieg_id.setter
     def akaflieg_id(self, value):
-        self._set('akaflieg_id', value)
+        old_akaflieg_id = self.akaflieg_id
+        self._set('akaflieg_id', value)  # Erst setzen, bei doppel Belegung abbrechen
+        self.db.cur.execute(
+            'UPDATE item_consumption SET akaflieg_id = ? WHERE akaflieg_id = ?',
+            (value, old_akaflieg_id)
+        )
+        self.db.con.commit()
     
     @full_name.setter
     def full_name(self, value):

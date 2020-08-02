@@ -131,6 +131,8 @@ def yes_no_full_name(respond, text, chat_dict):
         consumer = chat_dict['consumer_to_be_edited']
         respond(
             'Okay. Möchtest du die Akaflieg ID ändern?\n'
+            'Dabei werden alle Einkäufe von der alten ID an '
+            'die neue übernommen.\n'
             '({})'.format(consumer.akaflieg_id)
         )
         return 'yes_no_change_akaflieg_id'
@@ -144,6 +146,8 @@ def choose_full_name(respond, text, chat_dict):
 
     respond(
         'Der Name wurde gesetzt. Möchtest du die Akaflieg ID ändern?\n'
+        'Dabei werden alle Einkäufe von der alten ID an die neuen '
+        'übertragen.\n'
         '({})'.format(consumer.akaflieg_id),
         reply_markup=ReplyKeyboardMarkup([['Ja', 'Nein']])
     )
