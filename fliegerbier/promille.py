@@ -34,7 +34,7 @@ def _get_promille_message(c: Consumer):
 
         hours_since_last_drink = (consumption.timestamp - last_timestamp) / 3600
         for i in range(4):
-            last_promille[i] = max(0, last_promille[i] - decays[i] * hours_since_last_drink)
+            last_promille[i] = max(0.0, last_promille[i] - decays[i] * hours_since_last_drink)
 
         last_promille[0] += instant_promille_female
         last_promille[1] += instant_promille_female
