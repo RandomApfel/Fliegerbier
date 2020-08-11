@@ -12,3 +12,6 @@ tracebacks/
 # Temp
 __pycache__/
 *.pyc
+
+.vscode/*
+Pipfile*
