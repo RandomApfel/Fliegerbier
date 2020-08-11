@@ -4,7 +4,7 @@ from .emoji import emojis
 from time import time
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-BEER_SIZE = 330  # grams
+BEER_SIZE = 500  # grams
 BEER_PERCENT = 0.05  # percent
 FEMALE_HIGH_DECAY = 0.1  # promille per hour
 FEMALE_LOW_DECAY = 0.085  # promille per hour
