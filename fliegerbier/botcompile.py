@@ -27,23 +27,26 @@ from telegram.ext import (
 )
 
 
-_button_item_texts = [
-    item.button_text for item in item_list
-]
-_button_texts = _button_item_texts + [
-    'Status ausgeben'
-]
-
-
 def _reblock(block, width=2):
     new_block = []
     for i in range(0, len(block), width):
         new_block.append(block[i:min(i+width, len(block))])
     return new_block
 
-getreanke_markup = ReplyKeyboardMarkup(
-    _reblock(_button_texts)
-)
+_free_drinks_with_alc_text = 'Freie Getränke mit Alkohol'
+_back_to_buyable_drinks = 'Zurück zur Hauptübersicht'
+def get_main_reply_markup():
+    costly_items = [item.button_text for item in item_list if item.price > 0]
+    return ReplyKeyboardMarkup(
+        _reblock(costly_items) + [
+        ['/status', '/promille', _free_drinks_with_alc_text]
+    ])
+
+def get_free_alc_drinks_markup():
+    free_items = [item.button_text for item in item_list if item.price == 0]
+    return ReplyKeyboardMarkup(
+        [[_back_to_buyable_drinks]] + _reblock(free_items)
+    )
 
 
 @patch_telegram_action
@@ -54,7 +57,7 @@ def start_message(respond):
         'Der Abrechnungszuständige kann alles einsehen.'
     )
 
-    respond(text, reply_markup=getreanke_markup)
+    respond(text, reply_markup=get_main_reply_markup())
 
 @patch_telegram_action
 def telegram_unexpecte_text(respond, chat_id):
@@ -107,14 +110,18 @@ def handle_text(update, context, text, respond, chat_id):
         )
         return
 
-    if text not in _button_texts:
-        respond('Bitte nutze nur die Buttons.', reply_markup=getreanke_markup)
-        return
+    all_items = [item.button_text for item in item_list]
 
-    if text in _button_item_texts:
+    if text in all_items:
         f = enter_item_consumption(text)
+    elif text == _free_drinks_with_alc_text:
+        respond('Okay', reply_markup=get_free_alc_drinks_markup())
+        return
+    elif text == _back_to_buyable_drinks:
+        respond('Okay', reply_markup=get_main_reply_markup())
+        return
     else:
-        get_user_statistics(update, context)
+        respond('Bitte nutze die Buttons um deine Kauf einzutragen!', reply_markup=get_main_reply_markup())
         return
     
     f(update, context)
@@ -124,7 +131,7 @@ def build_updater():
     updater = Updater(
         token=BOTTOKEN,
         use_context=True,
-        workers=4,
+        workers=16,
         persistence=None
     )
 

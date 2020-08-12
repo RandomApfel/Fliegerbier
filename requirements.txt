@@ -1,1 +1,5 @@
 python-telegram-bot
+sqlalchemy
+databases[postgresql]
+databases[mysql]
+databases[sqlite]
