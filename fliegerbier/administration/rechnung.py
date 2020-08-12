@@ -85,10 +85,13 @@ def admin_rechnung_out(respond, edit, callback_data):
     )
     bio.seek(0)
 
-    respond(
-        'Monatsrechnung {:0>2}/{}'.format(month.month, month.year),
-        file=bio
-    )
+    if bio.read(1) == b'':
+        respond('Bisher wurde nix getrunken')
+    else:
+        respond(
+            'Monatsrechnung {:0>2}/{}'.format(month.month, month.year),
+            file=bio
+        )
 
 
 def _create_csv(month_n: int):
