@@ -91,9 +91,10 @@ def choose_full_name(respond, text, chat_dict):
     c.full_name = text
 
     respond(
-        'Der Name wurde gesetzt.\n'
+        'Der Name {} wurde gesetzt.\n'
         'Bitte gebe jetzt einen Spitznamen an.\n'
         'Der Nutzer wird mit diesem Spitzname angesprochen.'
+        .format(c.full_name)
     )
     return 'choose_name'
 
@@ -110,7 +111,9 @@ def choose_name(respond, chat_dict, text):
     chat_dict['current_client_nickname'] = text
 
     respond(
-        'Okay. Bitte gebe jetzt die Akaflieg Nutzer ID ein.'
+        'Okay. Der Spitzname {} wurde gesetzt.\n'
+        'Bitte gebe jetzt die Nutzer ID ein.'
+        .format(text)
     )
 
     return 'set_akaflieg_id'

@@ -16,3 +16,8 @@ __pycache__/
 
 #Venv
 venv/
+Pipfile*
+
+# Editors
+.vscode/
+
