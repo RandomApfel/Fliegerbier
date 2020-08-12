@@ -43,7 +43,8 @@ def backup(respond):
     from subprocess import Popen, PIPE
     from io import BytesIO
 
-    respond('Backup wird generiert...')
+    respond('Backup nicht möglich ei dynamischem Backend: TODO')
+    return
 
     p = Popen(['sqlite3', DATABASE, '.dump'], stdout=PIPE)
     out, err = p.communicate()

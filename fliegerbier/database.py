@@ -1,25 +1,53 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from sqlite3 import connect, OperationalError
 from time import time
 from datetime import datetime
 from typing import List, Dict, Tuple
 from collections import namedtuple
+from asyncio import run, get_event_loop
+import sqlalchemy
 from .config import DATABASE
-from .items import Item, item_list, item_lookup
+from .items import Item
 
 
 User = namedtuple('User', ['nickname', 'akaflieg_id', 'chat_id'])
 
 
-class ConsumptionEntry:
-    def __init__(self, timestamp: int, item_identifier: str, price_at_time: float):
-        self.timestamp = timestamp
-        self.item_identifier = item_identifier
-        self.price_at_time= price_at_time
+_db = sqlalchemy.create_engine(DATABASE, pool_size=4, max_overflow=40, client_encoding='utf8')
 
-    @property
-    def item(self) -> Item:
-        return item_lookup(self.item_identifier)
+metadata = sqlalchemy.MetaData()
+metadata.bind = _db
+
+consumptions = sqlalchemy.Table(
+    'consumptions',
+    metadata,
+    sqlalchemy.Column('id', sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column('akaflieg_id', sqlalchemy.Integer),
+    sqlalchemy.Column('timestamp', sqlalchemy.Integer),
+    sqlalchemy.Column('item_name', sqlalchemy.String),
+    sqlalchemy.Column('item_price_at_this_time', sqlalchemy.Float),
+    sqlalchemy.Column('gram_alcohol', sqlalchemy.Integer),
+)
+
+users = sqlalchemy.Table(
+    'users',
+    metadata,
+    sqlalchemy.Column('chat_id', sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column('nickname', sqlalchemy.String),
+    sqlalchemy.Column('akaflieg_id', sqlalchemy.Integer, unique=True),
+    sqlalchemy.Column('full_name', sqlalchemy.String),
+    sqlalchemy.Column('telegram_names', sqlalchemy.String),
+    sqlalchemy.Column('weight', sqlalchemy.Integer)
+)
+
+metadata.create_all(_db)
+
+
+class ConsumptionEntry:
+    def __init__(self, timestamp: int, item_name: str, price_at_time: float, gram_alcohol: int = 0):
+        self.timestamp = timestamp
+        self.item_name = item_name
+        self.price_at_time= price_at_time
+        self.gram_alcohol = gram_alcohol
 
     @property
     def datetime(self) -> datetime:
@@ -28,62 +56,63 @@ class ConsumptionEntry:
 
 class Database:
     def __init__(self):
-        self.con = connect(DATABASE)
-        self.cur = self.con.cursor()
-
-        self.cur.execute(
-            'CREATE TABLE IF NOT EXISTS users '
-            '(chat_id INT UNIQUE, nickname TEXT UNIQUE, akaflieg_id TEXT UNIQUE, '
-            'full_name TEXT, telegram_names TEXT, weight INT)'
-        )
-        self.cur.execute(
-            'CREATE TABLE IF NOT EXISTS item_consumption '
-            '(akaflieg_id INT, item_identifier TEXT, item_price_at_this_time FLOAT, timestamp INT)'
-        )
-        self.con.commit()
+        pass
 
     def enter_consumption(self, akaflieg_id: int, item: Item, consumption_time: int = None) -> int:
         if consumption_time is None:
             consumption_time = time()
-        self.cur.execute(
-            'INSERT INTO item_consumption (akaflieg_id, item_identifier, item_price_at_this_time, timestamp) '
-            'VALUES (?, ?, ?, ?)',
-            (akaflieg_id, item.identifier, item.price, int(consumption_time))
-        )
-        self.con.commit()
-        return self.cur.lastrowid
 
+        query = consumptions.insert().values(
+            akaflieg_id=akaflieg_id,
+            timestamp=consumption_time,
+            item_name=item.name,
+            item_price_at_this_time=item.price,
+            gram_alcohol=item.alcohol,
+        ).returning(consumptions.c.id)
+
+        with _db.connect() as con:
+            res = con.execute(query)
+        for line in res:
+            return line['id']
+    
     def remove_consumption(self, rowid: int):
-        self.cur.execute(
-            'DELETE FROM item_consumption WHERE rowid = ?', (rowid, )
+        query = consumptions.delete().where(
+            consumptions.c.id == rowid
         )
-        self.con.commit()
+        with _db.connect() as con:
+            con.execute(query)
 
     def create_user(self, chat_id):
-        self.cur.execute(
-            'INSERT INTO users (chat_id) VALUES (?)', (chat_id, )
+        query = users.insert().values(
+            chat_id=chat_id
         )
-        self.con.commit()
-
+        with _db.connect() as con:
+            con.execute(query)
+    
     def get_unauthorized_chat_ids(self) -> List[int]:
-        self.cur.execute(
-            'SELECT chat_id FROM users WHERE akaflieg_id IS NULL'
+        query = users.select(user.c.chat_id).where(
+            users.c.akaflieg_id == None
         )
+        with _db.connect() as con:
+            res = con.execute(query)
+
         res = [
-            r[0] for r in self.cur.fetchall()
+            r[0] for r in rr
         ]
         return res
 
     def get_consumer_list(self) -> List['Consumer']:
-        self.cur.execute(
-            'SELECT chat_id FROM users'
-        )
+        query = sqlalchemy.select([users.c.chat_id])
+
+        with _db.connect() as con:
+            rr = con.execute(query)
+
         res = [
-            Consumer(r[0]) for r in self.cur.fetchall()
+            Consumer(r['chat_id']) for r in rr
         ]
         res = sorted(res, key=lambda x: x.nickname)
         return res
-
+    
     def get_consumption_dictionary(
         self,
         from_timestamp: int = 0,
@@ -93,15 +122,23 @@ class Database:
         if to_timestamp is None:
             to_timestamp = int(time() + 10000)
 
-        self.cur.execute(
-            'SELECT akaflieg_id, item_identifier, item_price_at_this_time FROM item_consumption '
-            'WHERE timestamp >= ? AND timestamp < ?',
-            (from_timestamp, to_timestamp)
+        query = sqlalchemy.select([
+            consumptions.c.akaflieg_id,
+            consumptions.c.item_name,
+            consumptions.c.item_price_at_this_time,
+        ]).where(
+            sqlalchemy.and_(
+                consumptions.c.timestamp >= from_timestamp,
+                consumptions.c.timestamp < to_timestamp
+            )
         )
+        with _db.connect() as con:
+            rr = con.execute(query)
 
         res = {}
-        # res= {2203: {'beer': {'count': 5, 'sum': 5.0}, 'water': {'count': 2, 'sum': 0.8}}}
-        for akaflieg_id, item_identifier, item_price_at_this_time in self.cur.fetchall():
+        # res= {2203: {'Bier 0,33L': {'count': 5, 'sum': 5.0}, 'Stilles Wasser': {'count': 2, 'sum': 0.8}}}
+        for row in rr:
+            akaflieg_id, item_identifier, item_price_at_this_time = row['akaflieg_id'], row['item_name'], row['item_price_at_this_time']
             res[akaflieg_id] = res.get(akaflieg_id, {})
             res[akaflieg_id][item_identifier] = res[akaflieg_id].get(
                 item_identifier, {'count': 0, 'sum': 0}
@@ -113,42 +150,42 @@ class Database:
 
 class Consumer:
     def __init__(self, chat_id):
-        self.chat_id = chat_id
+        self.chat_id = int(chat_id)
         self.db = Database()
 
     @classmethod
     def from_akaflieg_id(cls, akaflieg_id):
         instance = cls(-1)
-        instance.db.cur.execute(
-            'SELECT chat_id FROM users WHERE akaflieg_id = ?',
-            (akaflieg_id, )
+        query = sqlalchemy.select([users.c.chat_id]).where(
+            users.c.akaflieg_id == akaflieg_id
         )
-        res = instance.db.cur.fetchone()
-        if res is None:
-            return instance
-        instance.chat_id = res[0]
+        with _db.connect() as con:
+            res = con.execute(query)
+
+        for line in res:
+            instance.chat_id = int(line['chat_id'])
         return instance
 
+    
     def _get(self, key):
-        cur = self.db.con.cursor()
-        cur.execute(
-            'SELECT {} FROM users WHERE chat_id = ?'.format(key),
-            (self.chat_id, )
-        )
-        res = cur.fetchone()
-        if res is None:
-            return None
-        cur.close()
-        return res[0]
+        with _db.connect() as con:
+            res = con.execute(
+                sqlalchemy.select([getattr(users.c, key)]).where(
+                    users.c.chat_id == self.chat_id
+                )
+            )
+        for line in res:
+            return line[key]
+        return None
 
+    
     def _set(self, key, value):
-        cur = self.db.con.cursor()
-        cur.execute(
-            'UPDATE users SET {} = ? WHERE chat_id = ?'.format(key),
-            (value, self.chat_id)
-        )
-        self.db.con.commit()
-        cur.close()
+        with _db.connect() as con:
+            con.execute(
+                users.update().where(
+                    users.c.chat_id == self.chat_id
+                ).values(**{key: value})
+            )
 
     @property
     def nickname(self) -> str:
@@ -172,21 +209,40 @@ class Consumer:
 
     @weight.setter
     def weight(self, value):
-        self._set('weight', value)
+        self._set('weight', int(value))
 
     @nickname.setter
     def nickname(self, value):
         self._set('nickname', value)
 
+    
+    def _async_id_change(self, value, old_akaflieg_id):
+        with _database_pool.transaction():
+            _database_pool.execute(
+                'UPDATE item_consumption SET akaflieg_id = :new WHERE akaflieg_id = :old',
+                {'new': int(value), 'old': int(old_akaflieg_id)}
+            )
+
     @akaflieg_id.setter
     def akaflieg_id(self, value):
-        old_akaflieg_id = self.akaflieg_id
-        self._set('akaflieg_id', value)  # Erst setzen, bei doppel Belegung abbrechen
-        self.db.cur.execute(
-            'UPDATE item_consumption SET akaflieg_id = ? WHERE akaflieg_id = ?',
-            (value, old_akaflieg_id)
+        old_akaflieg_id = self._get('akaflieg_id')
+
+        query_set_new_id = users.update().values(
+            akaflieg_id=int(value)
+        ).where(
+            users.c.chat_id == self.chat_id
         )
-        self.db.con.commit()
+        query_change_ids_in_consumptions = consumptions.update().values(
+            akaflieg_id=int(value)
+        ).where(
+            consumptions.c.akaflieg_id == old_akaflieg_id
+        )
+
+        with _db.connect() as con:
+            with con.begin():
+                con.execute(query_set_new_id)
+                con.execute(query_change_ids_in_consumptions)
+                # commits here
     
     @full_name.setter
     def full_name(self, value):
@@ -208,12 +264,17 @@ class Consumer:
     def unconsume(self, rowid: int):
         return self.db.remove_consumption(rowid)
     
+    
     def user_exists(self) -> bool:
-        self.db.cur.execute(
-            'SELECT count(*) FROM users WHERE chat_id = ?', (self.chat_id, )
+        query = sqlalchemy.select([users.c.chat_id]).where(
+            users.c.chat_id == int(self.chat_id)
         )
-        count = self.db.cur.fetchone()[0]
-        return (count >= 1)
+        with _db.connect() as con:
+            res = con.execute(query)
+
+        for line in res:
+            return True
+        return False
 
     def is_authorized(self) -> bool:
         value = self._get('akaflieg_id')
@@ -222,57 +283,45 @@ class Consumer:
     def create(self):
         self.db.create_user(self.chat_id)
 
+    
     def delete(self):
-        self.db.cur.execute(
-            'DELETE FROM users WHERE chat_id = ?',
-            (self.chat_id, )
+        query = users.delete().where(
+            chat_id=self.chat_id
         )
-        self.db.con.commit()
-
-    def get_stats(self, from_timestamp: int = 0, to_timestamp: int = None) -> Dict[str, Tuple[int, float]]:
-        if to_timestamp is None:
-            to_timestamp = int(time() + 10000)
-        
-        res = {}
-        #chat_id INT, item_identifier TEXT, item_price_at_this_time FLOAT, timestamp INT
-        self.db.cur.execute(
-            'SELECT item_identifier, item_price_at_this_time '
-            'FROM item_consumption WHERE akaflieg_id = ? '
-            'AND timestamp >= ? AND timestamp < ? '
-            'ORDER BY timestamp ASC',
-            (self.akaflieg_id, from_timestamp, to_timestamp)
-        )
-
-        for item_identifier, item_price_at_this_time in self.db.cur.fetchall():
-            t = res.get(item_identifier, (0, 0))
-            t = (t[0] + 1, t[1] + item_price_at_this_time)
-            res[item_identifier] = t
-
-        return res
+        with _db.connect() as con:
+            con.execute(query)
 
     def get_consumption_history(self, from_timestamp: int = 0, to_timestamp: int = None) -> List[ConsumptionEntry]:
         if to_timestamp is None:
             to_timestamp = int(time() + 10000)
-        self.db.cur.execute(
-            'SELECT timestamp, item_identifier, item_price_at_this_time '
-            'FROM item_consumption WHERE akaflieg_id = ? '
-            'AND timestamp >= ? AND timestamp < ? '
-            'ORDER BY timestamp ASC',
-            (self.akaflieg_id, from_timestamp, to_timestamp)
+        
+        query = query = sqlalchemy.select([
+            consumptions.c.timestamp,
+            consumptions.c.item_name,
+            consumptions.c.item_price_at_this_time,
+            consumptions.c.gram_alcohol,
+        ]).where(
+            sqlalchemy.and_(
+                consumptions.c.akaflieg_id == self.akaflieg_id,
+                consumptions.c.timestamp >= from_timestamp,
+                consumptions.c.timestamp < to_timestamp,
+            )
         )
 
-        res = self.db.cur.fetchall()
+        with _db.connect() as con:
+            res = con.execute(query)
+
         result = []
         for r in res:
             result.append(
-                ConsumptionEntry(r[0], r[1], r[2])
+                ConsumptionEntry(r[0], r[1], r[2], r[3])
             )
         return result
 
 
 # must be decorated manually
 def is_authorized(respond, chat_id, username, first_name, last_name, user):
-    client = Consumer(chat_id)
+    client = Consumer(int(chat_id))
 
     def none_str(t):
         if t is None:

@@ -4,14 +4,14 @@ from .emoji import emojis
 from time import time
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-BEER_SIZE = 500  # grams
-BEER_PERCENT = 0.05  # percent
+
 FEMALE_HIGH_DECAY = 0.1  # promille per hour
 FEMALE_LOW_DECAY = 0.085  # promille per hour
 MALE_HIGH_DECAY = 0.2  # promille per hour
 MALE_LOW_DECAY = 0.1  # promille per hour
 FEMALE_WATER = 0.6  # percent water female
 MALE_WATER = 0.7  # percent water male
+ALC_EFFECTIVENESS = 0.9  # how much gets absorbed
 
 
 def _get_promille_message(c: Consumer):
@@ -24,10 +24,9 @@ def _get_promille_message(c: Consumer):
     last_timestamp = 0
 
     for consumption in consum_history:
-        if consumption.item_identifier == 'beer':
-            gram_alcohol = BEER_SIZE * BEER_PERCENT # g * %
-        else:
+        if not consumption.gram_alcohol:
             continue
+        gram_alcohol = consumption.gram_alcohol * ALC_EFFECTIVENESS
 
         instant_promille_female = gram_alcohol / c.weight / FEMALE_WATER
         instant_promille_male = gram_alcohol / c.weight / MALE_WATER
@@ -47,22 +46,39 @@ def _get_promille_message(c: Consumer):
     for i in range(4):
         last_promille[i] = max(0.0, last_promille[i] - decays[i] * hours_since_last_drink)
 
+    male_max = last_promille[3]
+    female_max = last_promille[1]
+
+    male_hours = male_max / MALE_LOW_DECAY
+    female_hours = female_max / FEMALE_LOW_DECAY
+
     return (
         'Dein angenommenes Körpergewicht ist {weight}kg.\n'
         'Sämtliche hier ausgeführten Berechnungen sind nicht juristisch bindend.\n\n'
-        '{wine} Dein Promillegehalt:\n'
-        '{male} Männlich realistisch: {male_min:.3}, mit Sicherheitsfaktor: {male_max:.3}\n'
-        '{female} Weiblich realistisch: {female_min:.3}, mit Sicherheitsfaktor: {female_max:.3}\n'
+
+        '{male} Für Männer\n'
+        '{wine} Realistischer Gehalt ist {male_min:.3}{promille}, '
+        'mit Sicherheitsfaktor {male_max:.3}{promille}\n'
+        '{alarm} Du darfst in {male_hours:.3}h wieder fliegen.\n\n'
+        
+        '{female} Für Frauen\n'
+        '{wine} Realistisher Gehalt ist {female_min:.3}{promille}, '
+        'mit Sicherheitsfaktor {female_max:.3}{promille}\n'
+        '{alarm} Du darfst in {female_hours:.3}h wieder fliegen.'
 
         .format(
+            promille='‰',
             weight=c.weight,
             male=emojis.man,
             female=emojis.woman,
             wine=emojis.wine,
             male_min=last_promille[2],
-            male_max=last_promille[3],
+            male_max=male_max,
+            male_hours=male_hours,
             female_min=last_promille[0],
-            female_max=last_promille[1],
+            female_max=female_max,
+            female_hours=female_hours,
+            alarm=emojis.alarm,
         )
     )
 

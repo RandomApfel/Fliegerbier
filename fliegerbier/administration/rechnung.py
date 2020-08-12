@@ -5,12 +5,10 @@ from sqlite3 import IntegrityError
 from datetime import datetime
 from re import match
 from io import BytesIO
-from ..items import item_lookup
 from ..config import ADMINCHAT, BOTTOKEN, DATABASE
 from ..decorators import admin_only, patch_telegram_action
 from ..database import Database, Consumer
 from ..datecalculation import get_month
-
 
 
 def get_reply_markup(month_n):
@@ -116,12 +114,14 @@ def _create_csv(month_n: int):
     for akaflieg_id in keys:
         drinks = []
         sum_ = 0
-        for item_identifier in sorted(consumption[akaflieg_id].keys()):
-            item = item_lookup(item_identifier)
-            count = consumption[akaflieg_id][item_identifier]['count']
-            drinks.append('{} x{}'.format(item.name, count))
-            sum_ += consumption[akaflieg_id][item_identifier]['sum']
-        
+        for item_name in sorted(consumption[akaflieg_id].keys()):
+            if consumption[akaflieg_id][item_name]['sum'] == 0:
+                # Freigetränk, nicht auf die Liste
+                continue
+            count = consumption[akaflieg_id][item_name]['count']
+            drinks.append('{} x{}'.format(item_name, count))
+            sum_ += consumption[akaflieg_id][item_name]['sum']
+
         c = Consumer.from_akaflieg_id(akaflieg_id)
         full_name = '[nicht in Datenbank]'
         if c.is_authorized():

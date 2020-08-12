@@ -1,35 +1,46 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from typing import List
 from .decorators import patch_telegram_action, requires_authorization
-from .database import Consumer
+from .database import Consumer, ConsumptionEntry
 from .items import item_list, Item
 from .datecalculation import get_month
 from re import compile
 
 
-def _itemlookup(identifier: str) -> Item:
+def _item_emoji(item_name: str, ) -> str:
     for it in item_list:
-        if it.identifier == identifier:
-            return it
+        if it.name == item_name:
+            return it.emoji
 
-    assert False
+    return '🌀'  # Emoji for unknown item
 
 
-def statistics_to_message(stats: dict) -> str:
+def statistics_to_message(stats: List[ConsumptionEntry]) -> str:
     msg = ''
     sum_ = 0
-    for key in sorted(stats.keys()):
-        item = _itemlookup(key)
-        count, price_sum = stats[key]
+    drinks_counter_sum = {
+        #(Bier, 1.0): 6
+    }
+
+    for consumption in stats:
+        key = (consumption.item_name, consumption.price_at_time)
+        drinks_counter_sum[key] = drinks_counter_sum.get(key, 0) + 1
+
+    for key in sorted(drinks_counter_sum.keys()):
+        item_name, item_price_at_time = key
+        emoji = _item_emoji(item_name)
+        count = drinks_counter_sum[key]
         msg += (
-            '{emoji} {count} x {name} {sum:.2f}€\n'
+            '{emoji} {sum:.2f}€ {name} {price:.2f}€ x {count}\n'
             .format(
-                emoji=item.emoji,
+                emoji=emoji,
                 count=count,
-                name=item.name,
-                sum=price_sum,
+                name=item_name,
+                price=item_price_at_time,
+                sum=count * item_price_at_time,
             )
         )
-        sum_ += price_sum
+        sum_ += count * item_price_at_time
 
     msg += '\nIn der Summe: {:.2f}€'.format(sum_)
     return msg
@@ -68,7 +79,7 @@ def get_user_statistics(respond, chat_id):
     c = Consumer(chat_id)
     msg = 'Diesen Monat erworben:\n\n'
     month = get_month(n_backwards=0)
-    stats = c.get_stats(
+    stats = c.get_consumption_history(
         from_timestamp=month.start_ts,
         to_timestamp=month.end_ts,
     )
@@ -92,7 +103,7 @@ def update_user_statistics(edit, chat_id, original_message_id, callback_data, co
         desired_month = get_month(desired_month_n)
 
         msg = '{} {}\n\n'.format(desired_month.year, desired_month.month_name)
-        stats = c.get_stats(
+        stats = c.get_consumption_history(
             from_timestamp=desired_month.start_ts,
             to_timestamp=desired_month.end_ts,
         )
@@ -105,7 +116,7 @@ def update_user_statistics(edit, chat_id, original_message_id, callback_data, co
     if callback_data == 'user_view_all':
         # Show all
 
-        stats = c.get_stats()  # globally
+        stats = c.get_consumption_history()  # globally
         msg = 'Insgesamt erworben:\n\n'
         msg += statistics_to_message(stats)
         edit(message_id=original_message_id, new_text=msg, reply_markup=get_markup(around_month=0))
@@ -137,7 +148,7 @@ def get_user_csv(chat_id, commit_callback, respond):
             '{};{};{}€\n'
             .format(
                 entry.datetime,
-                entry.item.name,
+                entry.item_name,
                 entry.price_at_time
             ).encode('utf-8')
         )

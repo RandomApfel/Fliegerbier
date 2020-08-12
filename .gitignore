@@ -4,6 +4,7 @@
 
 # Config
 *.ini
+*.csv
 
 # Log
 log/
@@ -13,5 +14,10 @@ tracebacks/
 __pycache__/
 *.pyc
 
-.vscode/*
+#Venv
+venv/
 Pipfile*
+
+# Editors
+.vscode/
+

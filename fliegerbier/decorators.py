@@ -1,7 +1,6 @@
 import telegram
 import telegram.ext
 from io import BytesIO
-from requests import get
 from .config import ADMINCHAT
 from .database import is_authorized
 from .log import (

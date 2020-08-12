@@ -49,6 +49,7 @@ class emojis:
     stop_watch = '⏱'
     celebrate = '🎉'
     mailbox = '📬'
+    alarm = '⏰'
 
     # Food
     beer = '🍺'
