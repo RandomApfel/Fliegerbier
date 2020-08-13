@@ -12,7 +12,7 @@ from .items import Item
 User = namedtuple('User', ['nickname', 'akaflieg_id', 'chat_id'])
 
 
-_db = sqlalchemy.create_engine(DATABASE, pool_size=4, max_overflow=40, client_encoding='utf8')
+_db = sqlalchemy.create_engine(DATABASE)
 
 metadata = sqlalchemy.MetaData()
 metadata.bind = _db
@@ -68,12 +68,17 @@ class Database:
             item_name=item.name,
             item_price_at_this_time=item.price,
             gram_alcohol=item.alcohol,
-        ).returning(consumptions.c.id)
+        )
 
+        id_query = consumptions.select(consumptions.c.id).where(
+            consumptions.c.timestamp == consumption_time
+        )
         with _db.connect() as con:
-            res = con.execute(query)
-        for line in res:
-            return line['id']
+            with con.begin():
+                con.execute(query)
+                res = con.execute(id_query)
+                for line in res:
+                    return line['id']
     
     def remove_consumption(self, rowid: int):
         query = consumptions.delete().where(
@@ -94,24 +99,26 @@ class Database:
             users.c.akaflieg_id == None
         )
         with _db.connect() as con:
-            res = con.execute(query)
+            with con.begin():
+                res = con.execute(query)
 
-        res = [
-            r[0] for r in rr
-        ]
-        return res
+                res = [
+                    r[0] for r in rr
+                ]
+                return res
 
     def get_consumer_list(self) -> List['Consumer']:
         query = sqlalchemy.select([users.c.chat_id])
 
         with _db.connect() as con:
-            rr = con.execute(query)
+            with con.begin():
+                rr = con.execute(query)
 
-        res = [
-            Consumer(r['chat_id']) for r in rr
-        ]
-        res = sorted(res, key=lambda x: x.nickname)
-        return res
+                res = [
+                    Consumer(r['chat_id']) for r in rr
+                ]
+                res = sorted(res, key=lambda x: x.nickname)
+                return res
     
     def get_consumption_dictionary(
         self,
@@ -133,19 +140,20 @@ class Database:
             )
         )
         with _db.connect() as con:
-            rr = con.execute(query)
+            with con.begin():
+                rr = con.execute(query)
 
-        res = {}
-        # res= {2203: {'Bier 0,33L': {'count': 5, 'sum': 5.0}, 'Stilles Wasser': {'count': 2, 'sum': 0.8}}}
-        for row in rr:
-            akaflieg_id, item_identifier, item_price_at_this_time = row['akaflieg_id'], row['item_name'], row['item_price_at_this_time']
-            res[akaflieg_id] = res.get(akaflieg_id, {})
-            res[akaflieg_id][item_identifier] = res[akaflieg_id].get(
-                item_identifier, {'count': 0, 'sum': 0}
-            )
-            res[akaflieg_id][item_identifier]['count'] += 1
-            res[akaflieg_id][item_identifier]['sum'] += item_price_at_this_time
-        return res
+                res = {}
+                # res= {2203: {'Bier 0,33L': {'count': 5, 'sum': 5.0}, 'Stilles Wasser': {'count': 2, 'sum': 0.8}}}
+                for row in rr:
+                    akaflieg_id, item_identifier, item_price_at_this_time = row['akaflieg_id'], row['item_name'], row['item_price_at_this_time']
+                    res[akaflieg_id] = res.get(akaflieg_id, {})
+                    res[akaflieg_id][item_identifier] = res[akaflieg_id].get(
+                        item_identifier, {'count': 0, 'sum': 0}
+                    )
+                    res[akaflieg_id][item_identifier]['count'] += 1
+                    res[akaflieg_id][item_identifier]['sum'] += item_price_at_this_time
+                return res
 
 
 class Consumer:
@@ -160,23 +168,25 @@ class Consumer:
             users.c.akaflieg_id == akaflieg_id
         )
         with _db.connect() as con:
-            res = con.execute(query)
+            with con.begin():
+                res = con.execute(query)
 
-        for line in res:
-            instance.chat_id = int(line['chat_id'])
-        return instance
+                for line in res:
+                    instance.chat_id = int(line['chat_id'])
+                return instance
 
     
     def _get(self, key):
         with _db.connect() as con:
-            res = con.execute(
-                sqlalchemy.select([getattr(users.c, key)]).where(
-                    users.c.chat_id == self.chat_id
+            with con.begin():
+                res = con.execute(
+                    sqlalchemy.select([getattr(users.c, key)]).where(
+                        users.c.chat_id == self.chat_id
+                    )
                 )
-            )
-        for line in res:
-            return line[key]
-        return None
+                for line in res:
+                    return line[key]
+                return None
 
     
     def _set(self, key, value):
@@ -270,11 +280,13 @@ class Consumer:
             users.c.chat_id == int(self.chat_id)
         )
         with _db.connect() as con:
-            res = con.execute(query)
+            with con.begin():
+                res = con.execute(query)
+                for line in res:
+                    return True
+                return False
 
-        for line in res:
-            return True
-        return False
+        
 
     def is_authorized(self) -> bool:
         value = self._get('akaflieg_id')
@@ -309,14 +321,15 @@ class Consumer:
         )
 
         with _db.connect() as con:
-            res = con.execute(query)
+            with con.begin():
+                res = con.execute(query)
 
-        result = []
-        for r in res:
-            result.append(
-                ConsumptionEntry(r[0], r[1], r[2], r[3])
-            )
-        return result
+                result = []
+                for r in res:
+                    result.append(
+                        ConsumptionEntry(r[0], r[1], r[2], r[3])
+                    )
+                return result
 
 
 # must be decorated manually
