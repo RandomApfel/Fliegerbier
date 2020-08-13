@@ -47,7 +47,7 @@ def _respond(context, chat_id, from_user, delete_me):
             return m
         # TODO Audio
         # TODO Video
-        txt = txt.replace(".", "\.")
+        txt = txt.replace(".", "\.").replace("(", "\(").replace(")", "\)").replace("!", "\!").replace("-", "\-")
         res = context.bot.send_message(
             chat_id=chat_id,
             text=txt,
