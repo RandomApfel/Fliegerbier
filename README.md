@@ -26,10 +26,10 @@ itemcsv = items.csv
 
 ```
 ## Items
+( Getränkename ; Preis ; Emoji ; Gramm Alkohol )
 ```csv
-Getränkename ; Emoji ; Preis ; Gramm Alkohol
-Bier ; 🍺 ; 1.0 ; 16.5
-Limo; 🧃 ; 1.0; 0.0
-Wasser; 🌊; 0.4; 0.0
-Freibier; 🍺; 0.0, 16.5
+Bier ; 1.0 ; 🍺 ; 16.5
+Limo; 1.0 ; 🧃 ; 0.0
+Wasser ; 0.4 ; 🌊 ; 0.0
+Freibier ; 0.0 ; 🍺 ; 16.5
 ```
