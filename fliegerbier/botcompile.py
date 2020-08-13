@@ -27,19 +27,23 @@ from telegram.ext import (
 )
 
 
+_free_drinks_with_alc_text = 'Freie Getränke mit Alkohol'
+_back_to_buyable_drinks = 'Zurück zur Hauptübersicht'
+_status_text = 'Status'
+_promille_text = 'Promille'
+
+
 def _reblock(block, width=2):
     new_block = []
     for i in range(0, len(block), width):
         new_block.append(block[i:min(i+width, len(block))])
     return new_block
 
-_free_drinks_with_alc_text = 'Freie Getränke mit Alkohol'
-_back_to_buyable_drinks = 'Zurück zur Hauptübersicht'
 def get_main_reply_markup():
     costly_items = [item.button_text for item in item_list if item.price > 0]
     return ReplyKeyboardMarkup(
         _reblock(costly_items) + [
-        ['/status', '/promille', _free_drinks_with_alc_text]
+        [_status_text, _promille_text, _free_drinks_with_alc_text]
     ])
 
 def get_free_alc_drinks_markup():
@@ -120,8 +124,14 @@ def handle_text(update, context, text, respond, chat_id):
     elif text == _back_to_buyable_drinks:
         respond('Okay', reply_markup=get_main_reply_markup())
         return
+    elif text == _status_text:
+        get_user_statistics(update, context)
+        return
+    elif text == _promille_text:
+        get_promille(update, context)
+        return
     else:
-        respond('Bitte nutze die Buttons um deine Kauf einzutragen!', reply_markup=get_main_reply_markup())
+        respond('Bitte nutze die Buttons!', reply_markup=get_main_reply_markup())
         return
     
     f(update, context)
