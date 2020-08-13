@@ -1,7 +1,8 @@
-from telegram import Bot, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import ConversationHandler, CommandHandler, MessageHandler, Filters
+from telegram import Bot, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
 from datetime import datetime
 from sqlite3 import IntegrityError
+from re import match
 from ..config import ADMINCHAT, BOTTOKEN, DATABASE
 from ..decorators import admin_only, patch_telegram_action
 from ..database import Database, Consumer
@@ -25,6 +26,30 @@ def get_user_from_button(user_list, button_text):
         if user_text == button_text:
             return user
     raise ValueError('User not found. Race?')
+
+
+
+def get_user_data_buttons(chat_id):
+    consumer = Consumer(chat_id)
+    text = (
+        'Spitznamen: {nickname}\n'
+        'Voller Name: {full_name}\n'
+        'Akaflieg ID: {aka_id}\n'
+        'Chat ID: {chat_id}\n'
+        'Telegram Namen: {telegram_names}'
+    ).format(
+        nickname=consumer.nickname,
+        full_name=consumer.full_name,
+        aka_id=consumer.akaflieg_id,
+        chat_id=consumer.chat_id,
+        telegram_names=consumer.telegram_names,
+    )
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton('Editiere Spitzname', callback_data='edit_nickname_{}'.format(chat_id))],
+        [InlineKeyboardButton('Editiere vollen Namen', callback_data='edit_fullname_{}'.format(chat_id))],
+        [InlineKeyboardButton('Editiere Akaflieg ID', callback_data='edit_akaid_{}'.format(chat_id))],
+    ])
+    return text, reply_markup
 
 
 @admin_only
@@ -58,44 +83,37 @@ def select_user(respond, text, chat_dict):
         return 'select_user'
 
     consumer = get_user_from_button(user_list, text)
-    chat_dict['consumer_to_be_edited'] = consumer
+
+    text, reply_markup = get_user_data_buttons(consumer.chat_id)
+    print(reply_markup)
+    respond(text, reply_markup=reply_markup)
+    return ConversationHandler.END
+
+
+@patch_telegram_action
+def say_choose_nickname(respond, callback_data, original_message_id, chat_dict):
+    m = match(r'edit_nickname_(?P<chat_id>[0-9]+)$', callback_data)
+    chat_id = m.groupdict()['chat_id']
+    c = Consumer(chat_id)
+    chat_dict['consumer_to_be_edited'] = c
+    chat_dict['original_message_id'] = original_message_id
 
     respond(
-        'Möchtest du den Spitznamen ändern?\n'
-        '({})'.format(consumer.nickname),
-        reply_markup=ReplyKeyboardMarkup([['Ja', 'Nein']])
+        'Gebe einen neuen Spitznamen an.\n'
+        '({nickname})'
+        .format(nickname=c.nickname),
+        reply_markup=ReplyKeyboardRemove()
     )
-    return 'yes_no_change_nickname'
-    
-
-@admin_only
-@patch_telegram_action
-def yes_no_change_nickname(respond, text, chat_dict):
-    if text.lower() == 'ja':
-        respond(
-            'Okay. Wie soll der neue Nickname sein?',
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return 'choose_nickname'
-    elif text.lower() == 'nein':
-        consumer = chat_dict['consumer_to_be_edited']
-        respond(
-            'Okay. Möchtest du den vollen Namen ändern?\n'
-            '({})'.format(consumer.full_name)
-        )
-        return 'yes_no_full_name'
-    else:
-        respond('Bitte nutze die Buttons.')
-        return 'yes_no_change_nickname'
+    return 'choose_nickname'
 
 
 @admin_only
 @patch_telegram_action
-def choose_nickname(respond, text, chat_dict):
-    if not text.isalpha():
+def choose_nickname(respond, text, edit, chat_dict):
+    if '\n' in text:
         respond(
-            'Der Name darf keine Sonderzeichen oder Leerzeichen enthalten.\n'
-            'Bitte gebe einen validen Namen an.'
+            'Der Name darf keine Zeileumbrüche enthalten.\n'
+            'Bitte gebe einen validen Spitznamen an.'
         )
         return 'choose_nickname'
 
@@ -110,71 +128,71 @@ def choose_nickname(respond, text, chat_dict):
         return 'choose_nickname'
 
     consumer = chat_dict['consumer_to_be_edited']
-    respond(
-        'Okay. Möchtest du den vollen Namen ändern?\n'
-        '({})'.format(consumer.full_name),
-        reply_markup=ReplyKeyboardMarkup([['Ja', 'Nein']])
+    text, reply_markup = get_user_data_buttons(consumer.chat_id)
+    
+    respond('Okay. Der Wert wurde aktualisiert.')
+    edit(
+        message_id=chat_dict['original_message_id'],
+        new_text=text,
+        reply_markup=reply_markup
     )
-    return 'yes_no_full_name'
+    return ConversationHandler.END
+
+
+@patch_telegram_action
+def say_choose_full_name(respond, callback_data, original_message_id, chat_dict):
+    m = match(r'edit_fullname_(?P<chat_id>[0-9]+)$', callback_data)
+    chat_id = m.groupdict()['chat_id']
+    c = Consumer(chat_id)
+    chat_dict['consumer_to_be_edited'] = c
+    chat_dict['original_message_id'] = original_message_id
+
+    respond(
+        'Gebe einen neuen vollen Namen an.\n'
+        'Dieser wird auf der Rechnung verwendet.\n'
+        '({full_name})'
+        .format(full_name=c.full_name),
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return 'choose_full_name'
 
 
 @admin_only
 @patch_telegram_action
-def yes_no_full_name(respond, text, chat_dict):
-    if text.lower() == 'ja':
-        respond(
-            'Okay. Wie soll der neue Name sein?',
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return 'choose_full_name'
-    elif text.lower() == 'nein':
-        consumer = chat_dict['consumer_to_be_edited']
-        respond(
-            'Okay. Möchtest du die Akaflieg ID ändern?\n'
-            'Dabei werden alle Einkäufe von der alten ID an '
-            'die neue übernommen.\n'
-            '({})'.format(consumer.akaflieg_id)
-        )
-        return 'yes_no_change_akaflieg_id'
-
-
-@admin_only
-@patch_telegram_action
-def choose_full_name(respond, text, chat_dict):
+def choose_full_name(respond, text, chat_dict, edit):
     consumer = chat_dict['consumer_to_be_edited']
     consumer.full_name = text
 
-    respond(
-        'Der Name wurde gesetzt. Möchtest du die Akaflieg ID ändern?\n'
-        'Dabei werden alle Einkäufe von der alten ID an die neuen '
-        'übertragen.\n'
-        '({})'.format(consumer.akaflieg_id),
-        reply_markup=ReplyKeyboardMarkup([['Ja', 'Nein']])
+    text, reply_markup = get_user_data_buttons(consumer.chat_id)
+    respond('Okay. Der Wert wurde aktualisiert.')
+    edit(
+        message_id=chat_dict['original_message_id'],
+        new_text=text,
+        reply_markup=reply_markup
     )
-    return 'yes_no_change_akaflieg_id'
+    return ConversationHandler.END
+
+
+@patch_telegram_action
+def say_choose_aka_id(respond, callback_data, original_message_id, chat_dict):
+    m = match(r'edit_akaid_(?P<chat_id>[0-9]+)$', callback_data)
+    chat_id = m.groupdict()['chat_id']
+    c = Consumer(chat_id)
+    chat_dict['consumer_to_be_edited'] = c
+    chat_dict['original_message_id'] = original_message_id
+
+    respond(
+        'Bitte gebe die Akaflieg ID an.\n'
+        '({aka_id})'
+        .format(aka_id=c.akaflieg_id),
+        reply_markup=ReplyKeyboardRemove()
+    )
+    return 'choose_akaflieg_id'
+
 
 @admin_only
 @patch_telegram_action
-def yes_no_change_akaflieg_id(respond, text):
-    if text.lower() == 'ja':
-        respond(
-            'Okay. Wie soll die neue Akaflieg ID sein?',
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return 'choose_akaflieg_id'
-    elif text.lower() == 'nein':
-        respond(
-            'Okay. Die Nutzerdaten wurden geändert.',
-            reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
-    else:
-        respond('Bitte nutze die Buttons.')
-        return 'yes_no_change_akaflieg_id'
-
-
-@admin_only
-@patch_telegram_action
-def choose_akaflieg_id(respond, text, chat_dict):
+def choose_akaflieg_id(respond, text, chat_dict, edit):
     if not text.isdigit():
         respond(
             'Die Akaflieg Nutzer ID sollte eine Ganzzahl sein.\n'
@@ -182,8 +200,9 @@ def choose_akaflieg_id(respond, text, chat_dict):
         )
         return 'choose_akaflieg_id'
 
+    consumer = chat_dict['consumer_to_be_edited']
     try:
-        chat_dict['consumer_to_be_edited'].akaflieg_id = int(text)
+        consumer.akaflieg_id = int(text)
     except IntegrityError:
         respond(
             'Diese Akaflieg ID wurde bereits vergeben.'
@@ -193,7 +212,13 @@ def choose_akaflieg_id(respond, text, chat_dict):
         )
         return 'choose_akaflieg_id'
 
-    respond('Okay. Die Daten wurden gesetzt.')
+    text, reply_markup = get_user_data_buttons(consumer.chat_id)
+    respond('Okay. Der Wert wurde aktualisiert.')
+    edit(
+        message_id=chat_dict['original_message_id'],
+        new_text=text,
+        reply_markup=reply_markup
+    )
     return ConversationHandler.END
 
 
@@ -216,19 +241,21 @@ def cancel(respond):
 
 
 edit_handler = ConversationHandler(
-    entry_points=[CommandHandler('edit', edit)],
+    entry_points=[
+        CommandHandler('edit', edit),
+        CallbackQueryHandler(say_choose_nickname, pattern='edit_nickname_'),
+        CallbackQueryHandler(say_choose_full_name, pattern='edit_fullname_'),
+        CallbackQueryHandler(say_choose_aka_id, pattern='edit_akaid_'),
+    ],
     states={
         'select_user': [MessageHandler(Filters.text, select_user)],
-        'yes_no_change_nickname': [MessageHandler(Filters.text, yes_no_change_nickname)],
         'choose_nickname': [MessageHandler(Filters.text, choose_nickname)],
-        'yes_no_full_name': [MessageHandler(Filters.text, yes_no_full_name)],
         'choose_full_name': [MessageHandler(Filters.text, choose_full_name)],
-        'yes_no_change_akaflieg_id': [MessageHandler(Filters.text, yes_no_change_akaflieg_id)],
         'choose_akaflieg_id': [MessageHandler(Filters.text, choose_akaflieg_id)],
     },
     fallbacks=[
-        MessageHandler(Filters.all, fallback),
         CommandHandler('cancel', cancel),
+        MessageHandler(Filters.all, fallback),
     ]
 )
 
