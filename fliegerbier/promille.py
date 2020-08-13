@@ -57,13 +57,13 @@ def _get_promille_message(c: Consumer):
         'Sämtliche hier ausgeführten Berechnungen sind nicht juristisch bindend.\n\n'
 
         '{male} Für Männer\n'
-        '{wine} Bei {male_low_decay}{promille} pro Stunde: *{male_max:.3}{promille}*\n'
-        '{wine} Bei {male_high_decay}{promille} pro Stunde: {male_min:.3}{promille}\n'
+        '{wine} Bei {male_low_decay}{promille} Abbau pro Stunde: *{male_max:.3}{promille}*\n'
+        '{wine} Bei {male_high_decay}{promille} Abbau pro Stunde: {male_min:.3}{promille}\n'
         '{alarm} Du hast in {male_hours:.3}h kein Alkohol mehr im Blut.\n\n'
         
         '{female} Für Frauen\n'
-        '{wine} Bei {female_low_decay}{promille} pro Stunde: *{female_max:.3}{promille}*\n'
-        '{wine} Bei {female_high_decay}{promille} pro Stunde: {female_min:.3}{promille}\n'
+        '{wine} Bei {female_low_decay}{promille} Abbau pro Stunde: *{female_max:.3}{promille}*\n'
+        '{wine} Bei {female_high_decay}{promille} Abbau pro Stunde: {female_min:.3}{promille}\n'
         '{alarm} Du hast in {female_hours:.3}h kein Alkohol mehr im Blut.'
 
         .format(
