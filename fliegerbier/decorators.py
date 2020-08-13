@@ -11,6 +11,12 @@ from .log import (
 )
 
 
+def _custom_markdown_escape(txt, escapes):
+    for e in escapes:
+        txt = txt.replace(e, '\\' + e)
+    return txt
+
+
 def _respond(context, chat_id, from_user, delete_me):
     def do_deletion():
         while delete_me:
@@ -47,11 +53,13 @@ def _respond(context, chat_id, from_user, delete_me):
             return m
         # TODO Audio
         # TODO Video
-        txt = txt.replace(".", "\.").replace("(", "\(").replace(")", "\)").replace("!", "\!").replace("-", "\-")
+
+        if f_kwargs.get('escape_markdown', ''):
+            txt = _custom_markdown_escape(txt, f_kwargs.pop('escape_markdown'))
+
         res = context.bot.send_message(
             chat_id=chat_id,
             text=txt,
-            parse_mode=telegram.ParseMode.MARKDOWN_V2,
             **f_kwargs)
         log_response(res, from_user)
         if do_delete:
@@ -71,6 +79,8 @@ def _delete(context, chat_id):
 
 def _edit(context, chat_id):
     def f(message_id, new_text, **kwargs):
+        if kwargs.get('escape_markdown', ''):
+            new_text = _custom_markdown_escape(new_text, kwargs.pop('escape_markdown'))
         try:
             context.bot.edit_message_text(new_text, chat_id=chat_id, message_id=message_id, **kwargs)
         except telegram.TelegramError:
