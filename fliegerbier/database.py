@@ -11,8 +11,14 @@ from .items import Item
 
 User = namedtuple('User', ['nickname', 'akaflieg_id', 'chat_id'])
 
-
-_db = sqlalchemy.create_engine(DATABASE)
+if DATABASE.startswith('sqlite'):
+    _db = sqlalchemy.create_engine(DATABASE)
+else:
+    _db = sqlalchemy.create_engine(
+        DATABASE,
+        pool_size=4, max_overflow=40,
+        client_encoding='utf8'
+    )
 
 metadata = sqlalchemy.MetaData()
 metadata.bind = _db
@@ -71,15 +77,18 @@ class Database:
         )
 
         id_query = consumptions.select(consumptions.c.id).where(
-            consumptions.c.timestamp == consumption_time
-        )
+            consumptions.c.akaflieg_id == akaflieg_id
+        ).order_by(
+            consumptions.c.timestamp.desc()
+        ).limit(1)
+
         with _db.connect() as con:
             with con.begin():
                 con.execute(query)
                 res = con.execute(id_query)
                 for line in res:
                     return line['id']
-    
+
     def remove_consumption(self, rowid: int):
         query = consumptions.delete().where(
             consumptions.c.id == rowid

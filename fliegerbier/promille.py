@@ -2,7 +2,7 @@ from .decorators import patch_telegram_action, requires_authorization
 from .database import Consumer
 from .emoji import emojis
 from time import time
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 
 
 FEMALE_HIGH_DECAY = 0.1  # promille per hour
@@ -91,6 +91,7 @@ _plus_minus_markup = InlineKeyboardMarkup([
     InlineKeyboardButton('-1kg', callback_data='promille_minus')]
 ])
 
+_what_to_escape = '.-!()'
 
 @requires_authorization
 @patch_telegram_action
@@ -98,7 +99,9 @@ def get_promille(respond, chat_id):
     c = Consumer(chat_id)
     respond(
         _get_promille_message(c),
-        reply_markup=_plus_minus_markup
+        reply_markup=_plus_minus_markup,
+        escape_markdown=_what_to_escape,
+        parse_mode=ParseMode.MARKDOWN_V2,
     )
 
 
@@ -113,5 +116,7 @@ def get_promille_callback(edit, original_message_id, chat_id, callback_data):
     edit(
         message_id=original_message_id,
         new_text=_get_promille_message(c),
-        reply_markup=_plus_minus_markup
+        reply_markup=_plus_minus_markup,
+        escape_markdown=_what_to_escape,
+        parse_mode=ParseMode.MARKDOWN_V2,
     )
